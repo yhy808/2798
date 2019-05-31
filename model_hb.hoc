@@ -1,0 +1,144 @@
+celsius = 34
+inchan=40			//# of input channels
+outchan=5			//# of synaptic currents triggered by input channels
+wout=0.00013			//  strength of outchan synapses
+we=0.0				//  strength of all-to-all excitatory connections
+wi=0.0				//  strength of all-to-all inhibitory connections
+weg=0.00005			//  strength of Alphas to Gamma connection
+wig=0.00001			//  strength of Betas to Gamma connection
+
+//*********** objects definitions and indexes of selected cells *********
+ropen("connections.txt")
+dimcon=fscan()
+double index[dimcon][2]
+double chan[inchan]
+objref gs, b,gr,gf
+objref synga,syngb
+objref r
+objref netga[dimcon],netgb[dimcon],netab[dimcon][dimcon],netba[dimcon][dimcon]
+objref netaa[dimcon][dimcon],netbb[dimcon][dimcon]
+
+objref netinpa[inchan][outchan], netinpb[inchan][outchan], s[inchan]
+objref syninpa[inchan][outchan], syninpb[inchan][outchan] 
+objref synaa[inchan][outchan], synba[inchan][outchan] 
+objref synab[inchan][outchan], synbb[inchan][outchan] 
+objref spike[inchan][outchan],net,nil,yf,yr
+
+//******************* vectors needed for raster and firing rates plots ******
+yf = new Vector()
+yr = new Vector()
+
+for k=0, dimcon-1 {
+index[k][0]=fscan()
+index[k][1]=fscan()
+}
+ropen()
+
+//************input event times pattern *********************************
+ropen("exemplar.txt")
+for i=0, inchan-1 {
+chan[i]=fscan()*1000
+}
+ropen()
+
+create acell,gamma
+create alphac[inchan][outchan], betac[inchan][outchan]
+access gamma
+
+//*********** definitions of cells and their synaptic inputs *********
+gamma {
+	L=10 nseg=1 diam=10 
+	insert pas g_pas=1/6000 cm=1
+	insert nans gbar_nans=0.015 ena=55
+	insert kap gkabar_kap = 0.05 ek=-90
+
+	synga=new ExpSyn(0.5)
+	synga.tau=2
+	synga.e=0
+
+	syngb=new Exp2Syn(0.5)
+	syngb.tau1=6
+	syngb.tau2=6
+	syngb.e=-80
+	}
+
+for j=0, inchan-1 {
+
+acell {
+	s[j] = new NetStim(0.5)
+	s[j].number=1
+	s[j].interval=10
+	s[j].start=chan[j]
+	}
+
+for i=0, outchan-1 {
+alphac[j][i] {
+	L=10 nseg=1 diam=10 
+	insert pas g_pas=1/20000 cm=1
+	insert nans gbar_nans=0.015 ena=55
+	insert kap gkabar_kap = 0.05 ek=-90
+
+	syninpa[j][i]=new ExpSyn(0.5)
+	syninpa[j][i].tau=200+i*100
+	syninpa[j][i].e=0
+
+	synaa[j][i]=new ExpSyn(0.5)
+	synaa[j][i].tau=2
+	synaa[j][i].e=0
+
+	synba[j][i]=new Exp2Syn(0.5)
+	synba[j][i].tau1=6
+	synba[j][i].tau2=6
+	synba[j][i].e=-80
+
+	}
+
+betac[j][i] {
+	L=10 nseg=1 diam=10 
+	insert pas g_pas=1/20000 cm=1
+	insert nans gbar_nans=0.015 ena=55
+	insert kap gkabar_kap = 0.05 ek=-90
+
+	syninpb[j][i]=new ExpSyn(0.5)
+	syninpb[j][i].tau=200+i*100
+	syninpb[j][i].e=0
+
+	synab[j][i]=new ExpSyn(0.5)
+	synab[j][i].tau=2
+	synab[j][i].e=0
+
+	synbb[j][i]=new Exp2Syn(0.5)
+	synbb[j][i].tau1=6
+	synbb[j][i].tau2=6
+	synbb[j][i].e=-80
+
+	}
+
+//****************** Alpha and Beta connected with input currents*********
+	netinpa[j][i] = new NetCon(s[j],syninpa[j][i],1,0,wout)
+	netinpb[j][i] = new NetCon(s[j],syninpb[j][i],1,0,wout)
+
+spike[j][i] = new Vector()
+alphac[j][i] net = new NetCon(&alphac[j][i].v(0.5),nil,-20,0,0)
+net.record(spike[j][i])
+objref net
+}
+}
+
+//*********** all-to-all connections between selected cells ********
+for i=0, dimcon-1 {
+x0=index[i][0]
+y0=index[i][1]
+alphac[x0][y0] netga[i] = new NetCon(&alphac[x0][y0].v(0.5),synga,-20,0,weg)
+betac[x0][y0] netgb[i] = new NetCon(&betac[x0][y0].v(0.5),syngb,-20,0,wig)
+for j=0, dimcon-1 {
+x1=index[j][0]
+y1=index[j][1]
+if (j!=i) {
+	alphac[x0][y0] netaa[i][j] = new NetCon(&alphac[x0][y0].v(0.5),synaa[x1][y1],-20,0,we)
+	betac[x0][y0] netbb[i][j] = new NetCon(&betac[x0][y0].v(0.5),synbb[x1][y1],-20,0,wi)
+}
+betac[x0][y0] netba[i][j] = new NetCon(&betac[x0][y0].v(0.5),synba[x1][y1],-20,0,wi)
+alphac[x0][y0] netab[i][j] = new NetCon(&alphac[x0][y0].v(0.5),synab[x1][y1],-20,0,we)
+}
+}

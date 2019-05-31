@@ -1,0 +1,183 @@
+load_file("nrngui.hoc")
+load_file("model_hb.hoc")
+
+dt=0.05
+tstop=1000
+
+
+//********************** simulation window ******************************
+b = new VBox()
+b.intercept(1)
+gs = new Graph(0)
+gr = new Graph(0)
+gf = new Graph(0)
+gs.view(0,-70,tstop,100,0,0,100,100)
+gs.label(0.4,0.9,"Gamma Cell ")
+gr.view(0,0,tstop,31,0,200,10,100)
+gr.label(0.4,0.92," raster plot ")
+gf.view(0,0,tstop,110,0,300,100,100)
+gf.label(0.4,0.9," firing rates (Hz) ")
+xpanel("",1)
+xbutton("before training", "run_u()")
+xbutton("after training", "run_c()")
+xbutton("random activation", "run_r()")
+xpanel()
+b.intercept(0)
+b.map("Hopfield-Brody model",100,0,300,600)
+
+proc init() {
+	elaps=0
+
+	finitialize(v_init)
+	fcurrent()
+
+	forall {
+	if (ismembrane("pas")) {e_pas=v_init}
+	if (ismembrane("nans")) {e_pas=v_init+(ina+ik)/g_pas}
+	}
+}
+
+proc step() {
+	fadvance()
+	gs.plot(t)
+
+if (t>elaps) {
+	print t
+	elaps=elaps+100
+	gs.flush()
+	doNotify()
+	}
+}
+
+proc run() {
+	init()
+	while(t<tstop) { step()}
+
+//*************** raster plot ***************************
+	ydisp=1
+	for j=0, inchan-1 {
+	for i=0, outchan-1 {
+		yr.resize(spike[j][i].size())
+		yr.fill(ydisp)
+		for k=0, dimcon-1 {
+		if (j==index[k][0] && i==index[k][1]) {
+		yr.mark(gr,spike[j][i],"|",5)
+		ydisp=ydisp+1
+		gr.flush()
+		doNotify()
+				}
+		}
+	}
+	}
+
+//************** firing rates plot **********************
+for j=0, inchan-1 {
+	clr=j+1
+	while (clr>9) {
+	clr=clr-9
+	}
+	gf.color(clr)
+for i=0, outchan-1 {
+	if (spike[j][i].size()>2) {
+		yf.resize(spike[j][i].size()-1)
+			for k=1, spike[j][i].size()-1 {
+			yf.x[k-1]=1e3/(spike[j][i].x[k]-spike[j][i].x[k-1])
+						}
+		spike[j][i].rotate(-1,0)
+		spike[j][i].resize(spike[j][i].size()-1)
+			for k=0, dimcon-1 {
+				if (j==index[k][0] && i==index[k][1]) {
+				yf.line(gf,spike[j][i])
+				gf.flush()
+				doNotify()
+								}
+					}
+				}
+}
+}
+}
+
+//****run procedure for simulation before training (we=wi=0)*********
+proc run_u() {
+	for j=0, inchan-1 {
+	acell s[j].start=chan[j]
+	}
+	gs.exec_menu("Keep Lines")
+	gs.addvar("gamma.v(0.5)",1,1, 2*tstop,0,2)
+	gs.begin()
+	gr.exec_menu("Keep Lines")
+	gr.color(1)
+	gr.brush(1)
+	gr.begin()
+	gf.exec_menu("Keep Lines")
+	gf.brush(1)
+	gf.begin()
+	we=0.0
+	wi=0.0
+	setweights()
+	run()
+}
+
+//****run procedure for simulation after training (we>0,wi>0)*********
+proc run_c() {
+	for j=0, inchan-1 {
+	acell s[j].start=chan[j]
+	}
+	ropen()
+	gs.exec_menu("Keep Lines")
+	gs.addvar("gamma.v(0.5)",2,1, 2*tstop,0,2)
+	gs.begin()
+	gr.exec_menu("Keep Lines")
+	gr.color(2)
+	gr.brush(2)
+	gr.begin()
+	gf.exec_menu("Keep Lines")
+	gf.brush(2)
+	gf.begin()
+	we=0.00001
+	wi=0.000015
+	setweights()
+	run()
+}
+
+//****procedure for random activation times after training (we>=0, wi>0)*****
+proc run_r() {
+	r=new Random()
+	for j=0, inchan-1 {
+	acell s[j].start=r.uniform(200,350)
+	}
+	gs.exec_menu("Keep Lines")
+	gs.addvar("gamma.v(0.5)",3,1, 2*tstop,0,2)
+	gs.begin()
+	gr.exec_menu("Keep Lines")
+	gr.color(3)
+	gr.brush(1)
+	gr.begin()
+	gf.exec_menu("Keep Lines")
+	gf.brush(1)
+	gf.begin()
+	we=0.00001
+	wi=0.000015
+	setweights()
+	run()
+}
+
+proc setweights() {
+	for i=0, dimcon-1 {
+		xx0=index[i][0]
+		xx1=index[i][1]
+		for j=0, dimcon-1 {
+			yy0=index[j][0]
+			yy1=index[j][1]
+			if (j!=i) {
+			netaa[i][j].weight=we
+			netbb[i][j].weight=wi
+				}
+			netba[i][j].weight=wi
+			netab[i][j].weight=we
+		}
+	}
+}
+
+
+
